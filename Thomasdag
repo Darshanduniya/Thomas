@@ -1,0 +1,59 @@
+
+from datetime import datetime, timedelta
+from airflow import DAG
+from airflow.contrib.operators.ssh_operator import SSHOperator
+
+default_args = {
+    'owner': 'airflow',
+    'depends_on_past': False,
+    'start_date': datetime(2023, 5, 8),
+    'email_on_failure': False,
+    'email_on_retry': False,
+    'retries': 1,
+    'retry_delay': timedelta(minutes=5),
+}
+
+dag = DAG(
+    'remote_script_execution',
+    default_args=default_args,
+    description='Run a Python script on two remote SSH machines simultaneously',
+    schedule_interval=timedelta(days=1),
+)
+
+# Define the SSH connections to the two remote machines
+ssh_conn1 = {'ssh_conn_id': 'ssh_conn_1', 'remote_host': 'machine1', 'username': 'user1', 'password': 'pass1'}
+ssh_conn2 = {'ssh_conn_id': 'ssh_conn_2', 'remote_host': 'machine2', 'username': 'user2', 'key_file': '/path/to/private/key'}
+
+# Define the two tasks that run the Python script on the remote machines
+task1 = SSHOperator(
+    task_id='run_script_on_machine1',
+    ssh_conn_id=ssh_conn1['ssh_conn_id'],
+    command='python /path/to/remote/script.py',
+    dag=dag,
+)
+
+task2 = SSHOperator(
+    task_id='run_script_on_machine2',
+    ssh_conn_id=ssh_conn2['ssh_conn_id'],
+    command='python /path/to/remote/script.py',
+    dag=dag,
+)
+
+# Define the subtasks that are executed in parallel on the two machines
+subtask1 = SSHOperator(
+    task_id='subtask_on_machine1',
+    ssh_conn_id=ssh_conn1['ssh_conn_id'],
+    command='python /path/to/remote/subtask1.py',
+    dag=dag,
+)
+
+subtask2 = SSHOperator(
+    task_id='subtask_on_machine2',
+    ssh_conn_id=ssh_conn2['ssh_conn_id'],
+    command='python /path/to/remote/subtask2.py',
+    dag=dag,
+)
+
+# Define the dependencies between the tasks and subtasks
+task1 >> subtask1
+task2 >> subtask2
